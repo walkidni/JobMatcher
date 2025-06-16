@@ -96,13 +96,6 @@ npm run dev
 - Candidates: upload your resume, see matched jobs
 - Recruiters: post jobs, view your jobs, see matched candidates for each job
 
-## 📸 Screenshots
-
-> _Add screenshots here for login, dashboard, job posting, resume upload, etc._
-
-## 🤝 Contributing
-
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
 ## 📄 License
 
