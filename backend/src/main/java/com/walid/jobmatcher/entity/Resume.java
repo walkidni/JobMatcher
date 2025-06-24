@@ -23,4 +23,6 @@ public class Resume {
     @JoinColumn(name = "candidate_id")
     @JsonIgnore
     private Candidate candidate;
+
+    private String filePath;
 }

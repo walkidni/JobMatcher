@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import api, { resumes } from '../lib/api';
+import { Document, Page, pdfjs } from 'react-pdf';
+// @ts-ignore
+import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function MyResume() {
   const [profile, setProfile] = useState<{ id: number; name: string; email: string } | null>(null);
@@ -11,6 +18,12 @@ export default function MyResume() {
   const [profileError, setProfileError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState('');
+  const [showPdf, setShowPdf] = useState(false);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pdfError, setPdfError] = useState('');
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -36,10 +49,14 @@ export default function MyResume() {
       setResumeText(text);
       const resumeRes = await api.get(`/api/candidate/${candidateId}/resume`);
       setFileName(resumeRes.data.originalFileName);
-    } catch (err) {
+    } catch (err: any) {
       setResumeText(null);
       setFileName(null);
-      setResumeError('No resume found or failed to fetch resume.');
+      if (err.response && err.response.status === 404) {
+        setResumeError('No resume available.');
+      } else {
+        setResumeError('Failed to fetch resume.');
+      }
     } finally {
       setResumeLoading(false);
     }
@@ -47,6 +64,7 @@ export default function MyResume() {
 
   useEffect(() => {
     if (profile?.id) fetchResume(profile.id);
+    if (profile?.id) setPdfUrl(`/api/candidate/${profile.id}/resume/file`);
   }, [profile?.id]);
 
   const handleDelete = async () => {
@@ -66,6 +84,48 @@ export default function MyResume() {
     }
   };
 
+  const handlePreviewPdf = async () => {
+    if (!profile?.id) return;
+    setPdfError('');
+    setPdfLoading(true);
+    try {
+      const blob = await resumes.getPdf(profile.id);
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setShowPdf(true);
+    } catch (err) {
+      setPdfError('Failed to load PDF.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!profile?.id) return;
+    setDownloadLoading(true);
+    try {
+      const blob = await resumes.getPdf(profile.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || 'resume.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download PDF.');
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">My Resume</h1>
@@ -76,12 +136,10 @@ export default function MyResume() {
       ) : resumeLoading ? (
         <div className="text-gray-500">Loading resume...</div>
       ) : resumeError ? (
-        <div className="text-red-500">{resumeError}</div>
+        <div className={resumeError === 'No resume available.' ? 'text-gray-500' : 'text-red-500'}>{resumeError}</div>
       ) : resumeText ? (
         <div className="bg-white rounded-lg shadow p-4">
           <div className="mb-2 font-semibold">File Name: {fileName || 'Unknown'}</div>
-          <h5 className="font-semibold mb-2">Extracted Resume Text:</h5>
-          <pre className="whitespace-pre-wrap bg-gray-100 p-2 rounded text-xs max-h-60 overflow-y-auto">{resumeText}</pre>
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -89,7 +147,37 @@ export default function MyResume() {
           >
             {deleting ? 'Deleting...' : 'Delete Resume'}
           </button>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadLoading}
+            className="btn btn-secondary mt-4 ml-4"
+          >
+            {downloadLoading ? 'Downloading...' : 'Download Resume'}
+          </button>
           {deleteSuccess && <div className="text-green-600 text-sm mt-2">{deleteSuccess}</div>}
+          <div className="mt-6">
+            <button
+              className="btn btn-primary"
+              onClick={showPdf ? () => { setShowPdf(false); setPdfUrl(null); } : handlePreviewPdf}
+              disabled={pdfLoading}
+            >
+              {showPdf ? 'Hide PDF Preview' : pdfLoading ? 'Loading PDF...' : 'Preview PDF'}
+            </button>
+            {showPdf && pdfUrl && (
+              <div className="mt-4 border rounded shadow p-2 bg-gray-50">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                  onLoadError={err => setPdfError('Failed to load PDF.')}
+                >
+                  {Array.from(new Array(numPages), (el, index) => (
+                    <Page key={`page_${index + 1}`} pageNumber={index + 1} />
+                  ))}
+                </Document>
+                {pdfError && <div className="text-red-500">{pdfError}</div>}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div>No resume uploaded yet.</div>

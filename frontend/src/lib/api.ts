@@ -97,6 +97,13 @@ export const resumes = {
     const response = await api.get(`/api/candidate/${candidateId}/resume-text`);
     return response.data;
   },
+  getPdf: async (candidateId: number) => {
+    const response = await api.get(`/api/candidate/${candidateId}/resume/file`, {
+      responseType: 'blob',
+      headers: { 'Accept': 'application/pdf' },
+    });
+    return response.data; // This will be a Blob
+  },
 };
 
 export const jobPosts = {

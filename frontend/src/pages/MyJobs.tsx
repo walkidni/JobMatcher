@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api, { jobPosts } from '../lib/api';
+import api, { jobPosts, resumes } from '../lib/api';
 
 interface JobPost {
   id: number;
@@ -27,6 +27,7 @@ export default function MyJobs() {
   const [candidates, setCandidates] = useState<CandidateMatch[]>([]);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState('');
+  const [downloadLoadingId, setDownloadLoadingId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -76,10 +77,29 @@ export default function MyJobs() {
     setCandidatesError('');
   };
 
+  const handleDownloadResume = async (candidateId: number, candidateName?: string) => {
+    setDownloadLoadingId(candidateId);
+    try {
+      const blob = await resumes.getPdf(candidateId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = candidateName ? `${candidateName}-resume.pdf` : 'resume.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download resume.');
+    } finally {
+      setDownloadLoadingId(null);
+    }
+  };
+
   if (loading) {
     return <div className="p-8">Loading...</div>;
   }
-  if (error) {
+  if (error && jobs.length > 0) {
     return <div className="p-8 text-red-600">{error}</div>;
   }
 
@@ -89,7 +109,7 @@ export default function MyJobs() {
         {user?.role === 'RECRUITER' ? 'My Posted Jobs' : 'Matched Jobs'}
       </h1>
       {jobs.length === 0 ? (
-        <p>{user?.role === 'RECRUITER' ? 'No jobs posted yet.' : 'No matched jobs found.'}</p>
+        <p>{user?.role === 'RECRUITER' ? 'No jobs posted yet.' : 'No matched jobs available.'}</p>
       ) : (
         <div className="space-y-4">
           {jobs.map((job) => (
@@ -141,8 +161,14 @@ export default function MyJobs() {
                       <span className="font-medium">{cand.name || 'Unknown Name'}</span> (<span>{cand.email}</span>)
                       <span className="ml-2 text-green-700">Score: {cand.matchScore}</span>
                     </div>
-                    <div className="mt-1 bg-gray-100 p-2 rounded text-xs max-h-32 overflow-y-auto">
-                      {cand.resumeText ? cand.resumeText.slice(0, 500) + (cand.resumeText.length > 500 ? '...' : '') : 'No resume text.'}
+                    <div className="mt-1">
+                      <button
+                        className="btn btn-primary text-xs"
+                        onClick={() => handleDownloadResume(cand.id, cand.name)}
+                        disabled={downloadLoadingId === cand.id}
+                      >
+                        {downloadLoadingId === cand.id ? 'Downloading...' : 'Download Resume'}
+                      </button>
                     </div>
                   </li>
                 ))}

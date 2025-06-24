@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { auth } from '../lib/api';
+import { useAuthStore } from '../stores/auth';
 
 interface RegisterForm {
   name: string;
@@ -13,6 +14,7 @@ interface RegisterForm {
 
 export default function Register() {
   const navigate = useNavigate();
+  const setAuth = useAuthStore((state) => state.setAuth);
   const [error, setError] = useState('');
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<RegisterForm>();
   const password = watch('password');
@@ -24,7 +26,11 @@ export default function Register() {
         ? await auth.registerCandidate(data.email, data.password, data.name)
         : await auth.registerRecruiter(data.email, data.password, data.name);
       setAuth(response.token);
-      navigate('/');
+      if (data.userType === 'candidate') {
+        navigate('/my-jobs');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError('Registration failed. Please try again.');
     }

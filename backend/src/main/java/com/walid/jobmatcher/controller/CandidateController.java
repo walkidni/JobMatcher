@@ -11,9 +11,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.MediaType;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/candidate")
@@ -44,6 +52,16 @@ public class CandidateController {
             resumeRepository.findByCandidateId(candidateId).ifPresent(resumeRepository::delete);
             resumeRepository.flush();
 
+            // Save file to disk
+            String uploadDir = "uploads/resumes/";
+            File dir = new File(uploadDir);
+            if (!dir.exists()) dir.mkdirs();
+            String uniqueFileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+            Path filePath = Paths.get(uploadDir, uniqueFileName);
+            try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
+                fos.write(file.getBytes());
+            }
+
             InputStreamResource resource = new InputStreamResource(file.getInputStream());
             TikaDocumentReader reader = new TikaDocumentReader(resource);
             List<Document> docs = reader.get();
@@ -58,6 +76,7 @@ public class CandidateController {
             resume.setOriginalFileName(file.getOriginalFilename());
             resume.setExtractedText(sb.toString());
             resume.setCandidate(candidate);
+            resume.setFilePath(filePath.toString());
             resumeRepository.save(resume);
 
             return ResponseEntity.ok("Resume uploaded and parsed successfully via Spring AI.");
@@ -101,9 +120,45 @@ public class CandidateController {
                         candidate.setResume(null); // Break the association
                         candidateRepository.save(candidate);
                     }
+                    // Delete the file from the filesystem
+                    String filePath = resume.getFilePath();
+                    if (filePath != null && !filePath.isEmpty()) {
+                        Path path = Paths.get(filePath);
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            // Log the error, but continue to delete the DB record
+                            System.err.println("Failed to delete resume file: " + e.getMessage());
+                        }
+                    }
                     resumeRepository.delete(resume);
                     resumeRepository.flush();
                     return ResponseEntity.ok("Resume deleted successfully.");
+                })
+                .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
+    }
+
+    @GetMapping("/{candidateId}/resume/file")
+    public ResponseEntity<?> getResumeFile(@PathVariable Long candidateId) {
+        return resumeRepository.findByCandidateId(candidateId)
+                .map(resume -> {
+                    String filePath = resume.getFilePath();
+                    if (filePath == null || filePath.isEmpty()) {
+                        return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
+                    }
+                    Path path = Paths.get(filePath);
+                    if (!Files.exists(path)) {
+                        return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
+                    }
+                    try {
+                        byte[] fileBytes = Files.readAllBytes(path);
+                        return ResponseEntity.ok()
+                                .header("Content-Disposition", "inline; filename=\"" + resume.getOriginalFileName() + "\"")
+                                .contentType(MediaType.APPLICATION_PDF)
+                                .body(fileBytes);
+                    } catch (IOException e) {
+                        return ResponseEntity.internalServerError().body("Error reading resume file: " + e.getMessage());
+                    }
                 })
                 .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
     }
