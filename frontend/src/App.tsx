@@ -13,6 +13,7 @@ import UploadResume from './pages/UploadResume';
 import MyResume from './pages/MyResume';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
+import MyApplications from './pages/MyApplications';
 
 const queryClient = new QueryClient();
 
@@ -25,7 +26,7 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       {/* Recruiter routes */}
       <Route
-        path="/dashboard"
+        path="/profil"
         element={
           <PrivateRoute role="RECRUITER">
             <Layout><RecruiterDashboard /></Layout>
@@ -70,6 +71,14 @@ function AppRoutes() {
         element={
           <PrivateRoute role="CANDIDATE">
             <Layout><MyResume /></Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/my-applications"
+        element={
+          <PrivateRoute role="CANDIDATE">
+            <Layout><MyApplications /></Layout>
           </PrivateRoute>
         }
       />

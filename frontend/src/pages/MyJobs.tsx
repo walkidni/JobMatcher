@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api, { jobPosts, resumes } from '../lib/api';
+import api, { jobPosts, resumes, applications } from '../lib/api';
 
 interface JobPost {
   id: number;
@@ -28,6 +28,13 @@ export default function MyJobs() {
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState('');
   const [downloadLoadingId, setDownloadLoadingId] = useState<number | null>(null);
+  const [appliedJobIds, setAppliedJobIds] = useState<number[]>([]);
+  const [applyingJobId, setApplyingJobId] = useState<number | null>(null);
+  const [applicationsModalJobId, setApplicationsModalJobId] = useState<number | null>(null);
+  const [applicationsList, setApplicationsList] = useState<any[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+  const [downloadAppLoadingId, setDownloadAppLoadingId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -46,6 +53,9 @@ export default function MyJobs() {
           const candidateId = profileRes.data.id;
           const matchesRes = await api.get(`/api/match/candidate/${candidateId}/jobs`);
           setJobs(matchesRes.data);
+          // Fetch applied jobs for candidate
+          const applicationsRes = await applications.getApplicationsForCandidate(profileRes.data.id);
+          setAppliedJobIds(applicationsRes.map((app: any) => app.jobPostId));
         }
       } catch (err) {
         setError('Failed to fetch jobs.');
@@ -96,6 +106,72 @@ export default function MyJobs() {
     }
   };
 
+  const handleApply = async (jobId: number) => {
+    if (!user) return;
+    setApplyingJobId(jobId);
+    try {
+      const profileRes = await api.get('/api/candidate/me');
+      const candidateId = profileRes.data.id;
+      await applications.applyToJob(candidateId, jobId);
+      setAppliedJobIds((prev) => [...prev, jobId]);
+      alert('Application submitted successfully!');
+    } catch (err: any) {
+      alert(err?.response?.data || 'Failed to apply.');
+    } finally {
+      setApplyingJobId(null);
+    }
+  };
+
+  const handleViewApplications = async (jobId: number) => {
+    setApplicationsModalJobId(jobId);
+    setApplicationsLoading(true);
+    try {
+      const apps = await applications.getApplicationsForJob(jobId);
+      setApplicationsList(apps);
+    } catch (err) {
+      setApplicationsList([]);
+    } finally {
+      setApplicationsLoading(false);
+    }
+  };
+
+  const handleCloseApplications = () => {
+    setApplicationsModalJobId(null);
+    setApplicationsList([]);
+  };
+
+  const handleStatusUpdate = async (applicationId: number, status: string) => {
+    setStatusUpdatingId(applicationId);
+    try {
+      await applications.updateApplicationStatus(applicationId, status);
+      setApplicationsList((prev) => prev.map(app => app.applicationId === applicationId ? { ...app, status } : app));
+      alert('Status updated!');
+    } catch (err) {
+      alert('Failed to update status.');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const handleDownloadResumeApp = async (candidateId: number, candidateName?: string) => {
+    setDownloadAppLoadingId(candidateId);
+    try {
+      const blob = await resumes.getPdf(candidateId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = candidateName ? `${candidateName}-resume.pdf` : 'resume.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download resume.');
+    } finally {
+      setDownloadAppLoadingId(null);
+    }
+  };
+
   if (loading) {
     return <div className="p-8">Loading...</div>;
   }
@@ -124,12 +200,33 @@ export default function MyJobs() {
               {user?.role === 'CANDIDATE' && job.matchScore !== undefined && (
                 <div className="text-sm text-green-700 font-medium">Match Score: {job.matchScore}</div>
               )}
+              {user?.role === 'CANDIDATE' && (
+                <button
+                  className="btn btn-primary mt-2"
+                  onClick={() => handleApply(job.id)}
+                  disabled={appliedJobIds.includes(job.id) || applyingJobId === job.id}
+                >
+                  {appliedJobIds.includes(job.id)
+                    ? 'Applied'
+                    : applyingJobId === job.id
+                    ? 'Applying...'
+                    : 'Apply'}
+                </button>
+              )}
               {user?.role === 'RECRUITER' && (
                 <button
                   className="btn btn-secondary mt-2"
                   onClick={() => handleViewCandidates(job.id)}
                 >
                   View Matched Candidates
+                </button>
+              )}
+              {user?.role === 'RECRUITER' && (
+                <button
+                  className="btn btn-secondary mt-2"
+                  onClick={() => handleViewApplications(job.id)}
+                >
+                  View Applications
                 </button>
               )}
             </div>
@@ -175,6 +272,58 @@ export default function MyJobs() {
               </ul>
             ) : (
               <div>No matched candidates found.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {applicationsModalJobId !== null && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+            <button
+              onClick={handleCloseApplications}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h2 className="text-xl font-bold mb-4">Applications</h2>
+            {applicationsLoading ? (
+              <div>Loading applications...</div>
+            ) : applicationsList.length > 0 ? (
+              <ul className="list-disc pl-5">
+                {applicationsList.map((app) => (
+                  <li key={app.candidateId} className="mb-4">
+                    <div>
+                      <span className="font-medium">{app.candidateName}</span> (<span>{app.candidateEmail}</span>)
+                      <span className="ml-2">Status: {app.status}</span>
+                    </div>
+                    <div className="mt-1 flex gap-2 flex-wrap">
+                      {["APPLIED","REVIEWED","REJECTED","ACCEPTED"].map(status => (
+                        <button
+                          key={status}
+                          className={`btn btn-xs ${app.status === status ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => handleStatusUpdate(app.applicationId, status)}
+                          disabled={statusUpdatingId === app.applicationId || app.status === status}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2">
+                      <button
+                        className="btn btn-primary btn-xs"
+                        onClick={() => handleDownloadResumeApp(app.candidateId, app.candidateName)}
+                        disabled={downloadAppLoadingId === app.candidateId}
+                      >
+                        {downloadAppLoadingId === app.candidateId ? 'Downloading...' : 'Download Resume'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div>No applications found.</div>
             )}
           </div>
         </div>

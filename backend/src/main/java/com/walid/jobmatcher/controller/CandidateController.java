@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.MediaType;
+import com.walid.jobmatcher.entity.JobApplication;
+import com.walid.jobmatcher.repository.JobApplicationRepository;
+import com.walid.jobmatcher.entity.JobPost;
+import com.walid.jobmatcher.repository.JobPostRepository;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,11 +33,17 @@ public class CandidateController {
 
     private final CandidateRepository candidateRepository;
     private final ResumeRepository resumeRepository;
+    private final JobApplicationRepository jobApplicationRepository;
+    private final JobPostRepository jobPostRepository;
 
     public CandidateController(CandidateRepository candidateRepository,
-                               ResumeRepository resumeRepository) {
+                               ResumeRepository resumeRepository,
+                               JobApplicationRepository jobApplicationRepository,
+                               JobPostRepository jobPostRepository) {
         this.candidateRepository = candidateRepository;
         this.resumeRepository = resumeRepository;
+        this.jobApplicationRepository = jobApplicationRepository;
+        this.jobPostRepository = jobPostRepository;
     }
 
 
@@ -161,5 +171,42 @@ public class CandidateController {
                     }
                 })
                 .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
+    }
+
+    @PostMapping("/{candidateId}/apply/{jobPostId}")
+    public ResponseEntity<?> applyToJob(@PathVariable Long candidateId, @PathVariable Long jobPostId) {
+        Candidate candidate = candidateRepository.findById(candidateId)
+                .orElseThrow(() -> new IllegalArgumentException("Candidate not found"));
+        JobPost jobPost = jobPostRepository.findById(jobPostId)
+                .orElseThrow(() -> new IllegalArgumentException("Job post not found"));
+        if (jobApplicationRepository.findByCandidateIdAndJobPostId(candidateId, jobPostId).isPresent()) {
+            return ResponseEntity.badRequest().body("Already applied to this job");
+        }
+        JobApplication application = new JobApplication();
+        application.setCandidate(candidate);
+        application.setJobPost(jobPost);
+        application.setStatus(JobApplication.Status.APPLIED);
+        application.setAppliedAt(java.time.LocalDateTime.now());
+        jobApplicationRepository.save(application);
+        return ResponseEntity.ok("Application submitted successfully");
+    }
+
+    @GetMapping("/{candidateId}/applications")
+    public ResponseEntity<List<Map<String, Object>>> getApplicationsForCandidate(@PathVariable Long candidateId) {
+        Candidate candidate = candidateRepository.findById(candidateId)
+                .orElseThrow(() -> new IllegalArgumentException("Candidate not found"));
+        List<JobApplication> applications = jobApplicationRepository.findByCandidateId(candidateId);
+        List<Map<String, Object>> result = applications.stream().map(app -> {
+            JobPost job = app.getJobPost();
+            Map<String, Object> map = new java.util.HashMap<>();
+            map.put("applicationId", app.getId());
+            map.put("jobPostId", job.getId());
+            map.put("jobTitle", job.getTitle());
+            map.put("jobDescription", job.getDescription());
+            map.put("status", app.getStatus());
+            map.put("appliedAt", app.getAppliedAt());
+            return map;
+        }).toList();
+        return ResponseEntity.ok(result);
     }
 }

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -121,6 +121,25 @@ export const jobPosts = {
   },
   getByRecruiter: async (recruiterId: number) => {
     const response = await api.get(`/api/job-posts/recruiter/${recruiterId}`);
+    return response.data;
+  },
+};
+
+export const applications = {
+  applyToJob: async (candidateId: number, jobPostId: number) => {
+    const response = await api.post(`/api/candidate/${candidateId}/apply/${jobPostId}`);
+    return response.data;
+  },
+  getApplicationsForCandidate: async (candidateId: number) => {
+    const response = await api.get(`/api/candidate/${candidateId}/applications`);
+    return response.data;
+  },
+  getApplicationsForJob: async (jobPostId: number) => {
+    const response = await api.get(`/api/job-posts/${jobPostId}/applications`);
+    return response.data;
+  },
+  updateApplicationStatus: async (applicationId: number, status: string) => {
+    const response = await api.patch(`/api/job-posts/applications/${applicationId}/status`, { status });
     return response.data;
   },
 };

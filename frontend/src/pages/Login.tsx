@@ -22,7 +22,7 @@ export default function Login() {
 
       const payload = JSON.parse(atob(response.token.split('.')[1]));
       if (payload.role === 'RECRUITER') {
-        navigate('/dashboard');
+        navigate('/profil');
       } else {
         navigate('/my-jobs');
       }

@@ -40,7 +40,7 @@ export default function Layout({ children }: LayoutProps) {
               )}
               {user?.role === 'RECRUITER' && (
                 <>
-                  <Link to="/dashboard" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</Link>
+                  <Link to="/profil" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">My Profile</Link>
                   <Link to="/create-job" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Post Job</Link>
                   <Link to="/jobs" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">My Jobs</Link>
                 </>
@@ -50,6 +50,7 @@ export default function Layout({ children }: LayoutProps) {
                   <Link to="/my-jobs" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Matched Jobs</Link>
                   <Link to="/upload-resume" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Upload Resume</Link>
                   <Link to="/resumes" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">My Resume</Link>
+                  <Link to="/my-applications" className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">My Applications</Link>
                 </>
               )}
               {user && (
