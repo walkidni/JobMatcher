@@ -153,23 +153,14 @@ public class CandidateController {
     public ResponseEntity<?> getResumeFile(@PathVariable Long candidateId) {
         return resumeRepository.findByCandidateId(candidateId)
                 .map(resume -> {
-                    String filePath = resume.getFilePath();
-                    if (filePath == null || filePath.isEmpty()) {
+                    String fileUrl = resume.getFilePath();
+                    if (fileUrl == null || fileUrl.isEmpty()) {
                         return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
                     }
-                    Path path = Paths.get(filePath);
-                    if (!Files.exists(path)) {
-                        return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
-                    }
-                    try {
-                        byte[] fileBytes = Files.readAllBytes(path);
-                        return ResponseEntity.ok()
-                                .header("Content-Disposition", "inline; filename=\"" + resume.getOriginalFileName() + "\"")
-                                .contentType(MediaType.APPLICATION_PDF)
-                                .body(fileBytes);
-                    } catch (IOException e) {
-                        return ResponseEntity.internalServerError().body("Error reading resume file: " + e.getMessage());
-                    }
+                    // Redirect to Cloudinary URL
+                    return ResponseEntity.status(302)
+                            .header("Location", fileUrl)
+                            .build();
                 })
                 .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
     }
