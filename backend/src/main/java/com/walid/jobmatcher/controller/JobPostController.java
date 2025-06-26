@@ -8,6 +8,8 @@ import com.walid.jobmatcher.repository.JobApplicationRepository;
 import com.walid.jobmatcher.entity.JobApplication;
 import com.walid.jobmatcher.entity.Candidate;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JobPostController {
 
+    private static final Logger logger = LoggerFactory.getLogger(JobPostController.class);
     private final JobPostRepository jobPostRepository;
     private final RecruiterRepository recruiterRepository;
     private final JobApplicationRepository jobApplicationRepository;
@@ -28,12 +31,19 @@ public class JobPostController {
     public ResponseEntity<?> createJobPost(
             @RequestBody JobPost jobPost,
             Authentication authentication) {
-        Recruiter recruiter = recruiterRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("Recruiter not found"));
+        logger.info("Received request to create job post: {} by user: {}", jobPost, authentication != null ? authentication.getName() : "null");
+        try {
+            Recruiter recruiter = recruiterRepository.findByEmail(authentication.getName())
+                    .orElseThrow(() -> new RuntimeException("Recruiter not found"));
 
-        jobPost.setRecruiter(recruiter);
-        JobPost savedJobPost = jobPostRepository.save(jobPost);
-        return ResponseEntity.ok(savedJobPost);
+            jobPost.setRecruiter(recruiter);
+            JobPost savedJobPost = jobPostRepository.save(jobPost);
+            logger.info("Job post created successfully: {}", savedJobPost);
+            return ResponseEntity.ok(savedJobPost);
+        } catch (Exception e) {
+            logger.error("Error creating job post: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("An error occurred while creating the job post: " + e.getMessage());
+        }
     }
 
     @GetMapping

@@ -48,7 +48,6 @@ export const auth = {
   login: async (email: string, password: string) => {
     console.log('Attempting login for:', email);
     const response = await api.post('/auth/login', { email, password });
-    console.log('Login response:', response.data);
     return response.data;
   },
   registerCandidate: async (email: string, password: string, name: string) => {
