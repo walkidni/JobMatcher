@@ -71,7 +71,7 @@ public class CandidateController {
             Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
                 "resource_type", "auto",
                  "folder", "resumes"));
-            String url = (String) uploadResult.get("url");
+            String url = (String) uploadResult.get("secure_url");
 
             InputStreamResource resource = new InputStreamResource(file.getInputStream());
             TikaDocumentReader reader = new TikaDocumentReader(resource);
