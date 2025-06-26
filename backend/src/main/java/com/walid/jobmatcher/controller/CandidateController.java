@@ -18,6 +18,8 @@ import com.walid.jobmatcher.entity.JobPost;
 import com.walid.jobmatcher.repository.JobPostRepository;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -33,6 +35,7 @@ import java.util.UUID;
 @RequestMapping("/api/candidate")
 public class CandidateController {
 
+    private static final Logger logger = LoggerFactory.getLogger(CandidateController.class);
     private final CandidateRepository candidateRepository;
     private final ResumeRepository resumeRepository;
     private final JobApplicationRepository jobApplicationRepository;
@@ -55,6 +58,7 @@ public class CandidateController {
     @PostMapping("/{candidateId}/upload-resume")
     public ResponseEntity<?> uploadResume(@PathVariable Long candidateId,
                                           @RequestParam("file") MultipartFile file) {
+        logger.info("Received resume upload request for candidateId: {}. File name: {}", candidateId, file.getOriginalFilename());
         try {
             Candidate candidate = candidateRepository.findById(candidateId)
                     .orElseThrow(() -> new IllegalArgumentException("Candidate not found"));
@@ -72,6 +76,7 @@ public class CandidateController {
                 "resource_type", "auto",
                  "folder", "resumes"));
             String url = (String) uploadResult.get("secure_url");
+            logger.info("Resume uploaded to Cloudinary for candidateId: {}. Cloudinary URL: {}", candidateId, url);
 
             InputStreamResource resource = new InputStreamResource(file.getInputStream());
             TikaDocumentReader reader = new TikaDocumentReader(resource);
@@ -90,8 +95,10 @@ public class CandidateController {
             resume.setFilePath(url);
             resumeRepository.save(resume);
 
+            logger.info("Resume entity saved for candidateId: {}", candidateId);
             return ResponseEntity.ok("Resume uploaded to Cloudinary and parsed successfully via Spring AI.");
         } catch (Exception e) {
+            logger.error("Error uploading resume for candidateId: {}: {}", candidateId, e.getMessage(), e);
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
@@ -124,6 +131,7 @@ public class CandidateController {
 
     @DeleteMapping("/{candidateId}/resume")
     public ResponseEntity<?> deleteResume(@PathVariable Long candidateId) {
+        logger.info("Received request to delete resume for candidateId: {}", candidateId);
         return resumeRepository.findByCandidateId(candidateId)
                 .map(resume -> {
                     Candidate candidate = resume.getCandidate();
@@ -131,38 +139,47 @@ public class CandidateController {
                         candidate.setResume(null); // Break the association
                         candidateRepository.save(candidate);
                     }
-                    // Delete the file from the filesystem
+                    // Delete the file from the filesystem (legacy, may not exist)
                     String filePath = resume.getFilePath();
                     if (filePath != null && !filePath.isEmpty()) {
                         Path path = Paths.get(filePath);
                         try {
                             Files.deleteIfExists(path);
                         } catch (IOException e) {
-                            // Log the error, but continue to delete the DB record
-                            System.err.println("Failed to delete resume file: " + e.getMessage());
+                            logger.error("Failed to delete resume file from filesystem for candidateId: {}: {}", candidateId, e.getMessage());
                         }
                     }
                     resumeRepository.delete(resume);
                     resumeRepository.flush();
+                    logger.info("Resume deleted for candidateId: {}", candidateId);
                     return ResponseEntity.ok("Resume deleted successfully.");
                 })
-                .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
+                .orElseGet(() -> {
+                    logger.warn("Resume not found for candidateId: {}", candidateId);
+                    return ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId);
+                });
     }
 
     @GetMapping("/{candidateId}/resume/file")
     public ResponseEntity<?> getResumeFile(@PathVariable Long candidateId) {
+        logger.info("Received request to get resume file for candidateId: {}", candidateId);
         return resumeRepository.findByCandidateId(candidateId)
                 .map(resume -> {
                     String fileUrl = resume.getFilePath();
                     if (fileUrl == null || fileUrl.isEmpty()) {
+                        logger.warn("Resume file URL not found for candidateId: {}", candidateId);
                         return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
                     }
+                    logger.info("Redirecting to Cloudinary URL for candidateId: {}: {}", candidateId, fileUrl);
                     // Redirect to Cloudinary URL
                     return ResponseEntity.status(302)
                             .header("Location", fileUrl)
                             .build();
                 })
-                .orElseGet(() -> ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId));
+                .orElseGet(() -> {
+                    logger.warn("Resume not found in DB for candidateId: {}", candidateId);
+                    return ResponseEntity.status(404).body("Resume not found for candidate ID: " + candidateId);
+                });
     }
 
     @PostMapping("/{candidateId}/apply/{jobPostId}")
