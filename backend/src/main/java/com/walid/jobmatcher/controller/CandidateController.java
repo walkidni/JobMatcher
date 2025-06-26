@@ -76,7 +76,7 @@ public class CandidateController {
 
             // Save file to cloudinary
             Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
-                "resource_type", "auto",
+                "resource_type", "raw",
                 "type", "upload"));
             String url = (String) uploadResult.get("secure_url");
             logger.info("Resume uploaded to Cloudinary for candidateId: {}. Cloudinary URL: {}", candidateId, url);
