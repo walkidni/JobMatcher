@@ -20,6 +20,9 @@ import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -170,11 +173,19 @@ public class CandidateController {
                         logger.warn("Resume file URL not found for candidateId: {}", candidateId);
                         return ResponseEntity.status(404).body("Resume file not found for candidate ID: " + candidateId);
                     }
-                    logger.info("Redirecting to Cloudinary URL for candidateId: {}: {}", candidateId, fileUrl);
-                    // Redirect to Cloudinary URL
-                    return ResponseEntity.status(302)
-                            .header("Location", fileUrl)
-                            .build();
+                    try {
+                        RestTemplate restTemplate = new RestTemplate();
+                        org.springframework.http.ResponseEntity<byte[]> response = restTemplate.getForEntity(fileUrl, byte[].class);
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(response.getHeaders().getContentType());
+                        headers.setContentLength(response.getBody() != null ? response.getBody().length : 0);
+                        headers.set("Content-Disposition", "inline; filename=\"" + resume.getOriginalFileName() + "\"");
+                        logger.info("Serving resume file for candidateId: {} from Cloudinary", candidateId);
+                        return new ResponseEntity<>(response.getBody(), headers, HttpStatus.OK);
+                    } catch (Exception e) {
+                        logger.error("Error fetching resume file from Cloudinary for candidateId: {}: {}", candidateId, e.getMessage(), e);
+                        return ResponseEntity.internalServerError().body("Error fetching resume file: " + e.getMessage());
+                    }
                 })
                 .orElseGet(() -> {
                     logger.warn("Resume not found in DB for candidateId: {}", candidateId);
