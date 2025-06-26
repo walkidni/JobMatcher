@@ -16,6 +16,8 @@ import com.walid.jobmatcher.entity.JobApplication;
 import com.walid.jobmatcher.repository.JobApplicationRepository;
 import com.walid.jobmatcher.entity.JobPost;
 import com.walid.jobmatcher.repository.JobPostRepository;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -35,15 +37,18 @@ public class CandidateController {
     private final ResumeRepository resumeRepository;
     private final JobApplicationRepository jobApplicationRepository;
     private final JobPostRepository jobPostRepository;
+    private final Cloudinary cloudinary;
 
     public CandidateController(CandidateRepository candidateRepository,
                                ResumeRepository resumeRepository,
                                JobApplicationRepository jobApplicationRepository,
-                               JobPostRepository jobPostRepository) {
+                               JobPostRepository jobPostRepository,
+                               Cloudinary cloudinary) {
         this.candidateRepository = candidateRepository;
         this.resumeRepository = resumeRepository;
         this.jobApplicationRepository = jobApplicationRepository;
         this.jobPostRepository = jobPostRepository;
+        this.cloudinary = cloudinary;
     }
 
 
@@ -62,15 +67,11 @@ public class CandidateController {
             resumeRepository.findByCandidateId(candidateId).ifPresent(resumeRepository::delete);
             resumeRepository.flush();
 
-            // Save file to disk
-            String uploadDir = "uploads/resumes/";
-            File dir = new File(uploadDir);
-            if (!dir.exists()) dir.mkdirs();
-            String uniqueFileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get(uploadDir, uniqueFileName);
-            try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
-                fos.write(file.getBytes());
-            }
+            // Save file to cloudinary
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                "resource_type", "raw",
+                 "folder", "resumes"));
+            String url = (String) uploadResult.get("url");
 
             InputStreamResource resource = new InputStreamResource(file.getInputStream());
             TikaDocumentReader reader = new TikaDocumentReader(resource);
@@ -86,10 +87,10 @@ public class CandidateController {
             resume.setOriginalFileName(file.getOriginalFilename());
             resume.setExtractedText(sb.toString());
             resume.setCandidate(candidate);
-            resume.setFilePath(filePath.toString());
+            resume.setFilePath(url);
             resumeRepository.save(resume);
 
-            return ResponseEntity.ok("Resume uploaded and parsed successfully via Spring AI.");
+            return ResponseEntity.ok("Resume uploaded to Cloudinary and parsed successfully via Spring AI.");
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
