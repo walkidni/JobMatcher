@@ -141,7 +141,11 @@ public class CandidateController {
                         candidate.setResume(null); // Break the association
                         candidateRepository.save(candidate);
                     }
-                    cloudinary.uploader().destroy(resume.getFilePath(), ObjectUtils.emptyMap());
+                    try {
+                        cloudinary.uploader().destroy(resume.getFilePath(), ObjectUtils.emptyMap());
+                    } catch (Exception e) {
+                        logger.error("Error deleting resume file from Cloudinary for candidateId: {}: {}", candidateId, e.getMessage(), e);
+                    }
                     resumeRepository.delete(resume);
                     resumeRepository.flush();
                     logger.info("Resume deleted for candidateId: {}", candidateId);
