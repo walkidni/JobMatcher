@@ -76,8 +76,7 @@ public class CandidateController {
 
             // Save file to cloudinary
             Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
-                "resource_type", "auto",
-                 "folder", "resumes"));
+                "resource_type", "auto"));
             String url = (String) uploadResult.get("secure_url");
             logger.info("Resume uploaded to Cloudinary for candidateId: {}. Cloudinary URL: {}", candidateId, url);
 
@@ -142,16 +141,7 @@ public class CandidateController {
                         candidate.setResume(null); // Break the association
                         candidateRepository.save(candidate);
                     }
-                    // Delete the file from the filesystem (legacy, may not exist)
-                    String filePath = resume.getFilePath();
-                    if (filePath != null && !filePath.isEmpty()) {
-                        Path path = Paths.get(filePath);
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException e) {
-                            logger.error("Failed to delete resume file from filesystem for candidateId: {}: {}", candidateId, e.getMessage());
-                        }
-                    }
+                    cloudinary.uploader().destroy(resume.getFilePath(), ObjectUtils.emptyMap());
                     resumeRepository.delete(resume);
                     resumeRepository.flush();
                     logger.info("Resume deleted for candidateId: {}", candidateId);
