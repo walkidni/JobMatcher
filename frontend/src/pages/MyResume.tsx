@@ -10,7 +10,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function MyResume() {
   const [profile, setProfile] = useState<{ id: number; name: string; email: string } | null>(null);
-  const [resumeText, setResumeText] = useState<string | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -45,12 +44,9 @@ export default function MyResume() {
     setResumeLoading(true);
     setResumeError('');
     try {
-      const text = await resumes.getText(candidateId);
-      setResumeText(text);
       const resumeRes = await api.get(`/api/candidate/${candidateId}/resume`);
       setFileName(resumeRes.data.originalFileName);
     } catch (err: any) {
-      setResumeText(null);
       setFileName(null);
       if (err.response && err.response.status === 404) {
         setResumeError('No resume available.');
@@ -74,7 +70,6 @@ export default function MyResume() {
     setResumeError('');
     try {
       await api.delete(`/api/candidate/${profile.id}/resume`);
-      setResumeText(null);
       setFileName(null);
       setDeleteSuccess('Resume deleted successfully.');
     } catch (err) {
@@ -137,7 +132,7 @@ export default function MyResume() {
         <div className="text-gray-500">Loading resume...</div>
       ) : resumeError ? (
         <div className={resumeError === 'No resume available.' ? 'text-gray-500' : 'text-red-500'}>{resumeError}</div>
-      ) : resumeText ? (
+      ) : fileName ? (
         <div className="bg-white rounded-lg shadow p-4">
           <div className="mb-2 font-semibold">File Name: {fileName || 'Unknown'}</div>
           <button
